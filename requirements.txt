@@ -1,0 +1,7 @@
+openai
+pydantic
+numpy
+scikit-learn
+duckduckgo-search
+streamlit
+python-dotenv
