@@ -2,6 +2,6 @@ openai
 pydantic
 numpy
 scikit-learn
-duckduckgo-search
+ddgs
 streamlit
 python-dotenv

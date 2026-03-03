@@ -26,7 +26,7 @@ LLM_MAX_OUTPUT_TOKENS = int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "900"))
 # ==========================================
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 RETRIEVAL_TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "3"))
-RETRIEVAL_THRESHOLD = float(os.getenv("RETRIEVAL_THRESHOLD", "0.15"))
+RETRIEVAL_THRESHOLD = float(os.getenv("RETRIEVAL_THRESHOLD", "0.3"))
 
 # Access control
 INTERNAL_ALLOW_C2 = os.getenv("INTERNAL_ALLOW_C2", "false").lower() in ("1", "true", "yes", "y")
