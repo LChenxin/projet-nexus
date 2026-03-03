@@ -1,0 +1,98 @@
+[
+{
+"project_id": "P001",
+"title": "Rule-Based HR Q&A Chatbot (Decision Tree)",
+"year": 2024,
+"team": "HR Operations",
+"objective": "Provide instant answers to common HR questions using curated decision trees and predefined intents.",
+"tech_stack": ["ServiceNow Knowledge Base", "Decision-tree rule engine"],
+"outcome": "Failed to scale due to high maintenance of decision trees and frequent policy changes requiring manual updates.",
+"lessons_learned": ["Rule explosion made coverage brittle and increased update cost non-linearly as new edge cases were added.", "Poor adaptability to policy wording changes caused repeated regression bugs and inconsistent user answers without continuous re-authoring."],
+"status": "Closed",
+"confidentiality": "C1"
+},
+{
+"project_id": "P002",
+"title": "IT Helpdesk LLM Pilot Postmortem",
+"year": 2025,
+"team": "IT Service Desk",
+"objective": "Reduce ticket handling time by using an LLM to draft responses and guide troubleshooting during a production pilot.",
+"tech_stack": ["Azure OpenAI", "ServiceNow Integration"],
+"outcome": "Severe hallucinations occurred in the production pilot, including confident but incorrect remediation steps and inaccurate policy guidance.",
+"lessons_learned": ["Lack of RAG data isolation caused cross-domain contamination between IT runbooks and unrelated internal documents, amplifying hallucinations.", "High latency from multi-hop retrieval and tool calls exceeded SLA for live chat and increased abandonment rates.", "Inadequate monitoring (no per-intent quality gates, limited traceability, weak feedback loops) delayed detection of unsafe answer patterns."],
+"status": "Cancelled",
+"confidentiality": "C1"
+},
+{
+"project_id": "P003",
+"title": "HR Chat Policy Communication Standard (Keyword Alignment: HR / Chat / Policy)",
+"year": 2025,
+"team": "HR",
+"objective": "Standardize employee communication behavior for HR-related chat channels by defining acceptable topics, escalation etiquette, and response-time expectations.",
+"tech_stack": ["N/A"],
+"outcome": "Improved consistency in HR channel usage and reduced misrouted requests, but required repeated reinforcement to prevent drift back to informal habits.",
+"lessons_learned": ["Behavioral policies need periodic reinforcement and manager sponsorship; adoption decays without visible enforcement and reminders.", "Ambiguous phrasing increased exceptions and disputes, so examples and scenario-based clarifications are required for durable compliance."],
+"status": "Closed",
+"confidentiality": "C1"
+},
+{
+"project_id": "P004",
+"title": "Sales RAG Agent Architecture (Reusable Blueprint)",
+"year": 2025,
+"team": "Sales Enablement & Data",
+"objective": "Deliver a retrieval-augmented sales assistant that answers product, pricing, and contract questions using governed internal sources with reusable architecture.",
+"tech_stack": ["Qdrant", "Lightweight local LLM"],
+"outcome": "Highly successful and reusable architecture adopted by multiple sales regions, with strong answer consistency and rapid onboarding of new knowledge sources.",
+"lessons_learned": ["Strict document governance (source whitelisting, chunking standards, and versioned embeddings) reduced regressions when content changed.", "A lightweight local LLM with constrained prompting and deterministic retrieval significantly improved reliability and kept costs predictable at scale."],
+"status": "In Production",
+"confidentiality": "C2"
+},
+{
+"project_id": "P005",
+"title": "Large-Scale Cloud Migration Strategy (AWS/Azure)",
+"year": 2023,
+"team": "IT Infrastructure",
+"objective": "Define a multi-year migration strategy for core enterprise workloads to AWS and Azure with security, cost, and operating model alignment.",
+"tech_stack": ["AWS", "Azure"],
+"outcome": "Established landing zones and governance standards, but rollout slowed due to application dependency complexity and inconsistent ownership across regions.",
+"lessons_learned": ["Application dependency mapping and ownership alignment are prerequisites; without them, migration waves stall on hidden coupling and unclear accountability.", "FinOps controls must be designed upfront (tagging, budget alerts, and guardrails) to prevent early cost overruns and loss of stakeholder confidence."],
+"status": "POC",
+"confidentiality": "C1"
+},
+{
+"project_id": "P006",
+"title": "Marketing Data Pipeline Modernization (Snowflake/dbt)",
+"year": 2024,
+"team": "Marketing Analytics",
+"objective": "Build a reliable marketing data pipeline to unify campaign performance metrics and enable self-serve reporting across regions.",
+"tech_stack": ["Snowflake", "dbt"],
+"outcome": "Improved data freshness and metric consistency, enabling standardized dashboards and faster campaign iteration.",
+"lessons_learned": ["Metric definitions must be treated as versioned artifacts; ungoverned KPI drift breaks trust and creates conflicting reports.", "Incremental models and data quality tests are essential to keep SLAs stable as source systems change schemas and backfill behavior."],
+"status": "In Production",
+"confidentiality": "C1"
+},
+{
+"project_id": "P007",
+"title": "Annual Leave Management System Upgrade",
+"year": 2022,
+"team": "HR",
+"objective": "Upgrade the legacy annual leave system to improve request workflows, approval routing, and payroll integration stability.",
+"tech_stack": ["Java", "SQL"],
+"outcome": "Reduced approval cycle time and lowered support tickets, but required a longer stabilization period due to legacy integration constraints.",
+"lessons_learned": ["Legacy integrations need contract tests and staged cutovers; direct replacements caused unexpected payroll edge cases.", "Data migration must include reconciliation tooling to detect missing balances, duplicated requests, and historical rounding differences."],
+"status": "Closed",
+"confidentiality": "C1"
+},
+{
+"project_id": "P008",
+"title": "Office IoT Sensor Network for Meeting Room Occupancy",
+"year": 2023,
+"team": "Workplace Services",
+"objective": "Deploy occupancy sensors to improve meeting room utilization and enable more accurate space planning decisions.",
+"tech_stack": ["MQTT", "Azure IoT Hub"],
+"outcome": "Provided actionable utilization insights and reduced double-booking, but faced installation variability and ongoing device lifecycle management overhead.",
+"lessons_learned": ["Sensor calibration and placement standards are critical; inconsistent mounting produced noisy occupancy signals and unreliable analytics.", "Device lifecycle management (firmware updates, battery schedules, and secure provisioning) must be operationalized from day one to avoid fleet degradation."],
+"status": "In Production",
+"confidentiality": "C1"
+}
+]
