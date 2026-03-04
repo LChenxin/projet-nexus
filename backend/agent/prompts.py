@@ -31,6 +31,12 @@ Output RULES:
   ]
 }
 
+Rules for search_query:
+- Provide a dense keyword query suitable for search engines.
+- Avoid full sentences; prefer nouns/verbs and key entities.
+- Keep it under 12 words when possible.
+- Must be semantically aligned with the question.
+
 Valid intents (choose one per subtask):
 - "internal_similar_projects"
 - "lessons_learned"

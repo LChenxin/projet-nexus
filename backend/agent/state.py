@@ -49,6 +49,7 @@ class SubTask(TypedDict, total=False):
         "recommendation_inputs",
         "other",
     ]
+    search_query: str      # optimized query for retrieval
     evidence: EvidencePack  
 
 # =========================
