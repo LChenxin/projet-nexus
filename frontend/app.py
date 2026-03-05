@@ -20,29 +20,32 @@ from backend.agent.pipeline import run_planner, run_from_state
 from backend.agent.state import init_state
 
 
-st.set_page_config(page_title="Project Nexus (MVP)", layout="wide")
+st.set_page_config(page_title="Project Nexus", layout="wide")
 
-st.title("Project Nexus — Enterprise Project Discovery Agent (MVP)")
-st.caption("Planner → Deterministic Retrieval Executor → Summarizer → Guardrails → Trace logs")
+st.title("Project Nexus: Discovery Agent")
+st.caption("AI-powered research assistant for enterprise initiatives.")
 
 # =========================
 # Sidebar controls
 # =========================
 with st.sidebar:
-    st.header("Run Settings")
+    st.header("Settings")
 
     user_role = st.selectbox("User role", options=["standard", "admin"], index=0)
     st.markdown("---")
     st.write("Tips")
-    st.write("- Use a concrete work-related problem statement.")
-    st.write("- Admin role is for demonstrating future access patterns (ACL).")
+    st.markdown("- **Be specific:** The more context you provide, the better the historical matching.\n- **Access Control:** Switch to `admin` to simulate querying restricted (C2) initiatives.")
+
 
 
 # =========================
 # Main input
 # =========================
-default_query = "Start your next projet idea here "
-user_query = st.text_area("Project idea / work-related challenge", value=default_query, height=120)
+user_query = st.text_area(
+    "Describe your project idea or business challenge:", 
+    placeholder="e.g., We need to build an internal HR chatbot using LLMs to reduce L1 support tickets...", 
+    height=120
+)
 
 col_a, col_b = st.columns([1, 3])
 with col_a:
