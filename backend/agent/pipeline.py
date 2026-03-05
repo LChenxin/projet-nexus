@@ -297,8 +297,6 @@ def run_pipeline(user_query: str, user_role: str = "standard") -> Tuple[str, str
     t0 = time.time()
 
     subtasks, rejected, reason = run_planner(user_query)
-    #tools
-    state = run_executor(state)
 
     if rejected:
         state["final_report"] = f"Input rejected: {reason}"
@@ -307,11 +305,20 @@ def run_pipeline(user_query: str, user_role: str = "standard") -> Tuple[str, str
         return state["final_report"], str(trace_path)
 
     state["subtasks"] = subtasks
+    
+    if not state["subtasks"]:
+        state["final_report"] = "Please provide a concrete work-related project idea (1–2 sentences)."
+        state["warnings"].append("empty_subtasks")
+        state["metrics"]["latency_s"] = round(time.time() - t0, 3)
+        trace_path = _dump_state(state)
+        return state["final_report"], str(trace_path)
 
     if state.get("blocked"):
         state["metrics"]["latency_s"] = round(time.time() - t0, 3)
         trace_path = _dump_state(state)
         return state["final_report"], str(trace_path)
+    
+    state = run_executor(state)
 
     # Summarizer
     state = run_summarizer(state)
