@@ -200,16 +200,21 @@ def run_executor(state: AgentState) -> AgentState:
         aggregated_web.extend(web_items)
         aggregated_notes.extend(notes_i + notes_w)
 
+    unique_internal = list({item.get("project_id"): item for item in aggregated_internal if item.get("project_id")}.values())
+    # 2) 按 url 去重外部结果
+    unique_web = list({item.get("url"): item for item in aggregated_web if item.get("url")}.values())  
+    # 3) 去重 notes (保持顺序)
+    unique_notes = list(dict.fromkeys(aggregated_notes))
     state["aggregated_evidence"] = EvidencePack(
-        internal=aggregated_internal,
-        web=aggregated_web,
+        internal=unique_internal,
+        web=unique_web,
         internal_dropped_c2=dropped_c2_total,
-        notes=aggregated_notes,
+        notes=unique_notes,
     )
 
     # metrics（最小）
-    state["metrics"]["internal_count"] = len(aggregated_internal)
-    state["metrics"]["web_count"] = len(aggregated_web)
+    state["metrics"]["internal_count"] = len(unique_internal)
+    state["metrics"]["web_count"] = len(unique_web)
     state["metrics"]["dropped_c2"] = dropped_c2_total
     state["metrics"]["warnings_count"] = len(state.get("warnings", []))
 
