@@ -312,6 +312,7 @@ def run_pipeline(user_query: str, user_role: str = "standard") -> Tuple[str, str
     if rejected:
         state["final_report"] = f"Input rejected: {reason}"
         state["warnings"].append("planner_rejected")
+        state["metrics"]["latency_s"] = round(time.time() - t0, 3)
         trace_path = _dump_state(state)
         return state["final_report"], str(trace_path)
 
