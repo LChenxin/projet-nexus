@@ -19,8 +19,23 @@ Output RULES:
 - Do NOT wrap in markdown fences.
 - Do NOT include any commentary.
 - The JSON must follow this schema exactly:
+- Before creating subtasks, determine whether the user input describes a meaningful work-related challenge or project idea.
+  If the input is:
+  - abusive
+  - meaningless
+  - repeated nonsense
+  - unrelated to a project or research problem
+Then return:
 
 {
+  "rejected": true,
+  "reason": "short explanation",
+  "subtasks": []
+}
+Otherwise return:
+{
+  "rejected": false,
+  "reason": "",
   "subtasks": [
     {
       "id": "T1", 
