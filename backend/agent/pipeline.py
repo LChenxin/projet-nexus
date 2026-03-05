@@ -240,6 +240,17 @@ def run_summarizer(state: AgentState) -> AgentState:
     state["final_report"] = state["report_draft"]
     return state
 
+def run_from_state(state: AgentState) -> Tuple[str, str]:
+    t0 = time.time()
+
+    state = run_executor(state)
+    state = run_summarizer(state)
+    state = run_guardrails(state)
+
+    state["metrics"]["latency_s"] = round(time.time() - t0, 3)
+    trace_path = _dump_state(state)
+    return state["final_report"], str(trace_path)
+
 
 # =========================
 # 5) Guardrails: minimal checks
@@ -305,7 +316,7 @@ def run_pipeline(user_query: str, user_role: str = "standard") -> Tuple[str, str
         return state["final_report"], str(trace_path)
 
     state["subtasks"] = subtasks
-    
+
     if not state["subtasks"]:
         state["final_report"] = "Please provide a concrete work-related project idea (1–2 sentences)."
         state["warnings"].append("empty_subtasks")

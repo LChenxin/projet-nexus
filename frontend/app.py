@@ -1,7 +1,7 @@
 # frontend/app.py
 """
   1) final report (markdown)
-  2) trace 路径
+  2) trace
   3) subtasks + internal/web evidence
 
 """
@@ -12,10 +12,12 @@ import json
 from pathlib import Path
 import streamlit as st
 import sys
-
+import uuid
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from backend.agent.pipeline import run_pipeline
+# from backend.agent.pipeline import run_pipeline
+from backend.agent.pipeline import run_planner, run_from_state
+from backend.agent.state import init_state
 
 
 st.set_page_config(page_title="Project Nexus (MVP)", layout="wide")
@@ -56,8 +58,48 @@ if run_btn:
         st.warning("Please enter a project idea.")
         st.stop()
 
-    with st.spinner("Running pipeline..."):
-        report, trace_path = run_pipeline(user_query, user_role=user_role)
+    with st.status("Running...", expanded=True) as status:
+        # ---- Phase 1: Plan ----
+        status.update(label="Phase 1/3 — Planning subtasks", state="running")
+        subtasks, rejected, reason = run_planner(user_query)
+
+        if rejected:
+            st.warning(f"Input rejected: {reason}")
+            status.update(label="Done (rejected)", state="complete")
+            st.stop()
+
+        # visualize subtasks
+        st.subheader("Planned subtasks")
+        st.table(
+            [
+                {
+                    "intent": t.get("intent", ""),
+                    "question": t.get("question", ""),
+                }
+                for t in subtasks
+            ]
+        )
+
+        # ---- Phase 2: Execute tools ----
+        status.update(label="Phase 2/3 — Retrieving evidence ", state="running")
+
+        trace_id = uuid.uuid4().hex[:12]  
+        allow_c2 = (user_role == "admin") 
+
+        state = init_state(
+            user_query=user_query,
+            trace_id=trace_id,
+            user_role=user_role,
+            allow_c2=allow_c2,
+        )
+        state["subtasks"] = subtasks
+
+        # ---- Phase 3: Summarize + Guardrails + Trace ----
+        status.update(label="Phase 3/3 — Synthesizing report", state="running")
+        report, trace_path = run_from_state(state)
+
+        status.update(label="Done", state="complete")
+
 
     st.success("Done.")
 
