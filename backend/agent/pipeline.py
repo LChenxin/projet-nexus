@@ -188,9 +188,7 @@ def run_executor(state: AgentState) -> AgentState:
         aggregated_notes.extend(notes_i + notes_w)
 
     unique_internal = list({item.get("project_id"): item for item in aggregated_internal if item.get("project_id")}.values())
-    # 2) 按 url 去重外部结果
     unique_web = list({item.get("url"): item for item in aggregated_web if item.get("url")}.values())  
-    # 3) 去重 notes (保持顺序)
     unique_notes = list(dict.fromkeys(aggregated_notes))
     state["aggregated_evidence"] = EvidencePack(
         internal=unique_internal,
@@ -199,7 +197,6 @@ def run_executor(state: AgentState) -> AgentState:
         notes=unique_notes,
     )
 
-    # metrics（最小）
     state["metrics"]["internal_count"] = len(unique_internal)
     state["metrics"]["web_count"] = len(unique_web)
     state["metrics"]["dropped_c2"] = dropped_c2_total
@@ -232,16 +229,16 @@ def run_summarizer(state: AgentState) -> AgentState:
     state["final_report"] = state["report_draft"]
     return state
 
-def run_from_state(state: AgentState) -> Tuple[str, str]:
-    t0 = time.time()
+# def run_from_state(state: AgentState) -> Tuple[str, str]:
+#     t0 = time.time()
 
-    state = run_executor(state)
-    state = run_summarizer(state)
-    state = run_guardrails(state)
+#     state = run_executor(state)
+#     state = run_summarizer(state)
+#     state = run_guardrails(state)
 
-    state["metrics"]["latency_s"] = round(time.time() - t0, 3)
-    trace_path = _dump_state(state)
-    return state["final_report"], str(trace_path)
+#     state["metrics"]["latency_s"] = round(time.time() - t0, 3)
+#     trace_path = _dump_state(state)
+#     return state["final_report"], str(trace_path)
 
 
 # =========================
