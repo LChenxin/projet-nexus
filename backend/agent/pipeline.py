@@ -43,6 +43,16 @@ def _dump_state(state: AgentState) -> Path:
         json.dump(state, f, ensure_ascii=False, indent=2)
     return out_path
 
+def _add_event(state: AgentState, step: str, status: str, message: str) -> None:
+    state.setdefault("events", []).append(
+        {
+            "step": step,
+            "status": status,
+            "message": message,
+            "ts": round(time.time(), 3),
+        }
+    )
+
 
 # =========================
 # 2) Planner: user_query -> subtasks JSON
@@ -229,16 +239,36 @@ def run_summarizer(state: AgentState) -> AgentState:
     state["final_report"] = state["report_draft"]
     return state
 
-# def run_from_state(state: AgentState) -> Tuple[str, str]:
-#     t0 = time.time()
+def run_from_state(state: AgentState) -> Tuple[str, str]:
+    t0 = time.time()
 
-#     state = run_executor(state)
-#     state = run_summarizer(state)
-#     state = run_guardrails(state)
+    _add_event(state, "executor", "started", "Running retrieval")
+    state = run_executor(state)
+    _add_event(
+        state,
+        "executor",
+        "completed",
+        f"Retrieved {state['metrics']['internal_count']} internal and {state['metrics']['web_count']} web results",
+    )
 
-#     state["metrics"]["latency_s"] = round(time.time() - t0, 3)
-#     trace_path = _dump_state(state)
-#     return state["final_report"], str(trace_path)
+    _add_event(state, "summarizer", "started", "Drafting report")
+    state = run_summarizer(state)
+    _add_event(state, "summarizer", "completed", "Report drafted")
+
+    _add_event(state, "guardrails", "started", "Checking output safety and structure")
+    state = run_guardrails(state)
+
+    if state.get("blocked"):
+        _add_event(state, "guardrails", "failed", f"Output blocked: {state.get('block_reason', 'unknown')}")
+    else:
+        _add_event(state, "guardrails", "completed", "Checks passed")
+
+    state["metrics"]["latency_s"] = round(time.time() - t0, 3)
+    state["metrics"]["warnings_count"] = len(state.get("warnings", []))
+
+    _add_event(state, "pipeline", "completed", "Run finished")
+    trace_path = _dump_state(state)
+    return state["final_report"], str(trace_path)
 
 
 # =========================
@@ -296,18 +326,22 @@ def run_pipeline(user_query: str, user_role: str = "standard") -> Tuple[str, str
 
     t0 = time.time()
 
+    _add_event(state, "planner", "started", "Planning subtasks")
     subtasks, rejected, reason = run_planner(user_query)
 
     if rejected:
+        _add_event(state, "planner", "failed", f"Planner rejected input: {reason}")
         state["final_report"] = f"Input rejected: {reason}"
         state["warnings"].append("planner_rejected")
         state["metrics"]["latency_s"] = round(time.time() - t0, 3)
         trace_path = _dump_state(state)
         return state["final_report"], str(trace_path)
-
+    
+    _add_event(state, "planner", "completed", f"Generated {len(subtasks)} subtasks")
     state["subtasks"] = subtasks
 
     if not state["subtasks"]:
+        _add_event(state, "executor", "failed", "No valid subtasks generated")
         state["final_report"] = "Please provide a concrete work-related project idea (1–2 sentences)."
         state["warnings"].append("empty_subtasks")
         state["metrics"]["latency_s"] = round(time.time() - t0, 3)
@@ -315,19 +349,36 @@ def run_pipeline(user_query: str, user_role: str = "standard") -> Tuple[str, str
         return state["final_report"], str(trace_path)
 
     if state.get("blocked"):
+        _add_event(state, "executor", "failed", f"Execution blocked: {state.get('block_reason', '')}")
         state["metrics"]["latency_s"] = round(time.time() - t0, 3)
         trace_path = _dump_state(state)
         return state["final_report"], str(trace_path)
     
+    _add_event(state, "executor", "started", "Running retrieval")
     state = run_executor(state)
-
+    _add_event(
+    state,
+    "executor",
+    "completed",
+    f"Retrieved {state['metrics']['internal_count']} internal and {state['metrics']['web_count']} web results",
+    )
     # Summarizer
+    _add_event(state, "summarizer", "started", "Drafting report")
     state = run_summarizer(state)
+    _add_event(state, "summarizer", "completed", "Report drafted")
 
     # Guardrails
+    _add_event(state, "guardrails", "started", "Checking output safety and structure")
     state = run_guardrails(state)
+
+    if state.get("blocked"):
+        _add_event(state, "guardrails", "failed", f"Output blocked: {state.get('block_reason', 'unknown')}")
+    else:
+        _add_event(state, "guardrails", "completed", "Checks passed")
 
     state["metrics"]["latency_s"] = round(time.time() - t0, 3)
 
+    _add_event(state, "pipeline", "completed", "Run finished")
     trace_path = _dump_state(state)
     return state["final_report"], str(trace_path)
+    

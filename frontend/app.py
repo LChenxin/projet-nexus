@@ -119,6 +119,30 @@ if run_btn:
     try:
         p = Path(trace_path)
         trace = json.loads(p.read_text(encoding="utf-8"))
+        # =========================
+        # Pipeline progress
+        # =========================
+        st.markdown("### Pipeline Progress")
+
+        events = trace.get("events", []) or []
+
+        if not events:
+            st.info("No pipeline events recorded.")
+        else:
+            status_icon = {
+                "started": "🟡",
+                "completed": "🟢",
+                "failed": "🔴",
+            }
+
+            for ev in events:
+                icon = status_icon.get(ev.get("status"), "⚪")
+                step = ev.get("step", "")
+                message = ev.get("message", "")
+                ts = ev.get("ts", "")
+
+                st.write(f"{icon} **{step}** — {message}")
+                st.caption(f"time: {ts}")
 
         # High-level metrics / warnings
         mcol1, mcol2, mcol3 = st.columns(3)

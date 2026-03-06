@@ -34,6 +34,11 @@ class EvidencePack(TypedDict, total=False):
     notes: List[str]
     sources_flat: List[Dict[str, Any]]
 
+class PipelineEvent(TypedDict, total=False):
+    step: str
+    status: Literal["started", "completed", "failed"]
+    message: str
+    ts: float
 
 # =========================
 # 2) Task decomposition
@@ -82,6 +87,7 @@ class AgentState(TypedDict, total=False):
     # ---- Observability ----
     errors: List[str]       
     metrics: Dict[str, Any] 
+    events: List[PipelineEvent]
 
 
 # =========================
@@ -104,7 +110,9 @@ def init_state(
         final_report="",
         warnings=[],
         blocked=False,
+        block_reason="",
         errors=[],
+        events=[],
         metrics={
             "internal_count": 0,
             "web_count": 0,
