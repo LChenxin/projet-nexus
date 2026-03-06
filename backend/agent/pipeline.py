@@ -19,8 +19,6 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from streamlit import text
-
 from backend import config
 from backend.llm import chat
 from backend.agent.state import AgentState, EvidencePack, SubTask, init_state
@@ -30,7 +28,7 @@ from backend.tools.web_search import web_search
 
 
 # =========================
-# 1) Utility: trace id + logging
+# 1) Utility
 # =========================
 def _new_trace_id() -> str:
     return uuid.uuid4().hex[:12]
@@ -53,9 +51,22 @@ def _add_event(state: AgentState, step: str, status: str, message: str) -> None:
         }
     )
 
+def _finalize_and_dump(state: AgentState, t0: float) -> Tuple[str, str]:
+    """
+    Finalize common metrics, append pipeline completion event, dump trace,
+    and return final_report + trace path.
+    """
+    state["metrics"]["latency_s"] = round(time.time() - t0, 3)
+    state["metrics"]["warnings_count"] = len(state.get("warnings", []))
+
+    _add_event(state, "pipeline", "completed", "Run finished")
+    trace_path = _dump_state(state)
+    return state.get("final_report", ""), str(trace_path)
+
+
 
 # =========================
-# 2) Planner: user_query -> subtasks JSON
+# 2) Planner
 # =========================
 from typing import Tuple, Optional
 
@@ -98,14 +109,14 @@ def run_planner(user_query: str) -> Tuple[List[SubTask], bool, str]:
         return [], True, "Failed to parse planner output into valid JSON."
 
 # =========================
-# 3) Executor: deterministic tool calls
+# 3) Executor
 # =========================
 def _internal_retrieve(query: str, allow_c2: bool) -> Tuple[List[Dict[str, Any]], int]:
     try:
         searcher = get_internal_search()
         res = searcher.search(query,allow_c2=allow_c2)
         internal_results = res.get("results", [])
-        dropped_c2 = 0
+        dropped_c2 = res.get("dropped_c2", 0) # Add: count C2
         return internal_results, dropped_c2
     except Exception as e:
         print(f"[Demo Debug] Internal search failed for '{query}': {e}")
@@ -129,7 +140,7 @@ def _apply_retrieval_gate_internal(items: List[Dict[str, Any]]) -> Tuple[List[Di
 
     # Rank by score
     top1 = items[0].get("score", 0.0)
-    accepted = [x for x in items if x.get("score", 0.0) >= config.RETRIEVAL_THRESHOLD]
+    accepted = items
 
     if top1 < max(config.RETRIEVAL_THRESHOLD, 0.30):
         notes.append(f"Weak internal evidence (top score={top1:.2f}).")
@@ -217,7 +228,7 @@ def run_executor(state: AgentState) -> AgentState:
 
 
 # =========================
-# 4) Summarizer: evidence -> report
+# 4) Summarizer
 # =========================
 def run_summarizer(state: AgentState) -> AgentState:
 
@@ -240,40 +251,10 @@ def run_summarizer(state: AgentState) -> AgentState:
     state["final_report"] = state["report_draft"]
     return state
 
-def run_from_state(state: AgentState) -> Tuple[str, str]:
-    t0 = time.time()
-
-    _add_event(state, "executor", "started", "Running retrieval")
-    state = run_executor(state)
-    _add_event(
-        state,
-        "executor",
-        "completed",
-        f"Retrieved {state['metrics']['internal_count']} internal and {state['metrics']['web_count']} web results",
-    )
-
-    _add_event(state, "summarizer", "started", "Drafting report")
-    state = run_summarizer(state)
-    _add_event(state, "summarizer", "completed", "Report drafted")
-
-    _add_event(state, "guardrails", "started", "Checking output safety and structure")
-    state = run_guardrails(state)
-
-    if state.get("blocked"):
-        _add_event(state, "guardrails", "failed", f"Output blocked: {state.get('block_reason', 'unknown')}")
-    else:
-        _add_event(state, "guardrails", "completed", "Checks passed")
-
-    state["metrics"]["latency_s"] = round(time.time() - t0, 3)
-    state["metrics"]["warnings_count"] = len(state.get("warnings", []))
-
-    _add_event(state, "pipeline", "completed", "Run finished")
-    trace_path = _dump_state(state)
-    return state["final_report"], str(trace_path)
 
 
 # =========================
-# 5) Guardrails: minimal checks
+# 5) Guardrails (minimal checks)
 # =========================
 _REQUIRED_HEADERS = [
     "## Problem framing",
@@ -312,63 +293,78 @@ def run_guardrails(state: AgentState) -> AgentState:
     return state
 
 
-# =========================
-# 6) Public API: run pipeline
-# =========================
-def run_pipeline(user_query: str, user_role: str = "standard") -> Tuple[str, str]:
+# ====================
+# 6) API
+# ====================
+
+def plan_pipeline(user_query: str, user_role: str = "standard") -> AgentState:
     """
-    Returns:
-      final_report (str), trace_path (str)
+    Stage 1 only:
+    - initialize state
+    - run planner
+    - store subtasks in state
+    - record planner events / warnings
+
+    This allows the frontend to visualize subtasks before continuing.
     """
     trace_id = _new_trace_id()
     allow_c2 = (user_role == "admin") and config.INTERNAL_ALLOW_C2
-
     state = init_state(user_query=user_query, trace_id=trace_id, user_role=user_role, allow_c2=allow_c2)
-
-    t0 = time.time()
 
     _add_event(state, "planner", "started", "Planning subtasks")
     subtasks, rejected, reason = run_planner(user_query)
 
+    # planner hard rejection
     if rejected:
         _add_event(state, "planner", "failed", f"Planner rejected input: {reason}")
         state["final_report"] = f"Input rejected: {reason}"
         state["warnings"].append("planner_rejected")
-        state["metrics"]["latency_s"] = round(time.time() - t0, 3)
-        trace_path = _dump_state(state)
-        return state["final_report"], str(trace_path)
+        return state
     
-    _add_event(state, "planner", "completed", f"Generated {len(subtasks)} subtasks")
+    
     state["subtasks"] = subtasks
+    _add_event(state, "planner", "completed", f"Generated {len(subtasks)} subtasks")
 
     if not state["subtasks"]:
-        _add_event(state, "executor", "failed", "No valid subtasks generated")
-        state["final_report"] = "Please provide a concrete work-related project idea (1–2 sentences)."
         state["warnings"].append("empty_subtasks")
-        state["metrics"]["latency_s"] = round(time.time() - t0, 3)
-        trace_path = _dump_state(state)
-        return state["final_report"], str(trace_path)
+        state["final_report"] = "Please provide a concrete work-related project idea (1–2 sentences)."
+
+    return state
+
+def continue_pipeline(state: AgentState) -> Tuple[str, str]:
+    """
+    Continue execution from an already-initialized/planned state.
+    This is the backend API the frontend should call after visualizing subtasks.
+    """
+    t0 = time.time()
+
+    # Early exits if planning already ended the run
+    if state.get("warnings") and "planner_rejected" in state.get("warnings", []):
+        return _finalize_and_dump(state, t0)
+
+    if not state.get("subtasks"):
+        _add_event(state, "executor", "failed", "No valid subtasks generated")
+        if not state.get("final_report"):
+            state["final_report"] = "Please provide a concrete work-related project idea (1–2 sentences)."
+        return _finalize_and_dump(state, t0)
 
     if state.get("blocked"):
         _add_event(state, "executor", "failed", f"Execution blocked: {state.get('block_reason', '')}")
-        state["metrics"]["latency_s"] = round(time.time() - t0, 3)
-        trace_path = _dump_state(state)
-        return state["final_report"], str(trace_path)
-    
+        return _finalize_and_dump(state, t0)
+
     _add_event(state, "executor", "started", "Running retrieval")
     state = run_executor(state)
     _add_event(
-    state,
-    "executor",
-    "completed",
-    f"Retrieved {state['metrics']['internal_count']} internal and {state['metrics']['web_count']} web results",
+        state,
+        "executor",
+        "completed",
+        f"Retrieved {state['metrics']['internal_count']} internal and {state['metrics']['web_count']} web results",
     )
-    # Summarizer
+
     _add_event(state, "summarizer", "started", "Drafting report")
     state = run_summarizer(state)
     _add_event(state, "summarizer", "completed", "Report drafted")
 
-    # Guardrails
     _add_event(state, "guardrails", "started", "Checking output safety and structure")
     state = run_guardrails(state)
 
@@ -377,9 +373,23 @@ def run_pipeline(user_query: str, user_role: str = "standard") -> Tuple[str, str
     else:
         _add_event(state, "guardrails", "completed", "Checks passed")
 
-    state["metrics"]["latency_s"] = round(time.time() - t0, 3)
+    return _finalize_and_dump(state, t0)
 
-    _add_event(state, "pipeline", "completed", "Run finished")
-    trace_path = _dump_state(state)
-    return state["final_report"], str(trace_path)
+def run_from_state(state: AgentState) -> Tuple[str, str]:
+    return continue_pipeline(state)
+
+def run_pipeline(user_query: str, user_role: str = "standard") -> Tuple[str, str]:
+    """
+    Full end-to-end API:
+      1) plan
+      2) continue execution
+
+    Returns:
+      final_report (str), trace_path (str)
+    """
+    # >>> CHANGED
+    state = plan_pipeline(user_query=user_query, user_role=user_role)
+    return continue_pipeline(state)
+
+
     

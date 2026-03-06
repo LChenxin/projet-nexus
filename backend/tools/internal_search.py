@@ -80,6 +80,7 @@ class InternalSearch:
                 "query": query,
                 "results": evidence,
                 "count": len(evidence),
+                "dropped_c2": 0  # Initialize dropped C2 count
             }
 
 
