@@ -91,10 +91,10 @@ if run_btn:
     st.markdown(report)
 
     # --- Trace path ---
-    st.subheader("Trace")
-    st.code(trace_path)
+    st.subheader("Trace ID")
+    st.code(state.get("trace_id", "—"))
 
-    # --- Load trace JSON for transparency ---
+    # --- Load trace JSON  ---
     st.subheader("Execution Details (Trace)")
     try:
         p = Path(trace_path)

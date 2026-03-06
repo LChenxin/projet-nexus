@@ -11,9 +11,15 @@ class InternalEvidenceItem(TypedDict, total=False):
     project_id: str
     title: str
     score: float
+    year: int
+    team: str
+    objective: str
+    outcome: str
+    lessons_learned: List[str]
+    tech_stack: List[str]
     summary: str
     status: str
-    confidentiality: str 
+    confidentiality: str
 
 
 class WebEvidenceItem(TypedDict, total=False):

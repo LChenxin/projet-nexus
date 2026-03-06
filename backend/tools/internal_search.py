@@ -52,10 +52,12 @@ class InternalSearch:
             scores = np.dot(docs_norm, query_norm)
 
             results: List[Tuple[float, Dict[str, Any]]] = []
-
+            dropped_c2 = 0
+            
             for idx, project in enumerate(self.projects):
                 
                 if not allow_c2 and project.get("confidentiality") == "C2":
+                    dropped_c2 += 1
                     continue
 
                 score = scores[idx]
@@ -68,19 +70,25 @@ class InternalSearch:
             evidence = []
             for score, project in top_results:
                 evidence.append({
-                    "project_id": project["project_id"],
-                    "title": project["title"],
+                    "project_id": project.get("project_id", ""),
+                    "title": project.get("title", ""),
                     "score": round(float(score), 4),
-                    "summary": project["objective"],
-                    "status": project["status"],
-                    "confidentiality": project.get("confidentiality", "Public") 
+                    "year": project.get("year"),
+                    "team": project.get("team", ""),
+                    "objective": project.get("objective", ""),
+                    "outcome": project.get("outcome", ""),
+                    "lessons_learned": project.get("lessons_learned", []),
+                    "tech_stack": project.get("tech_stack", []),
+                    "status": project.get("status", ""),
+                    "confidentiality": project.get("confidentiality", "Public"),
+                    "summary": project.get("objective", ""),
                 })
 
             return {
                 "query": query,
                 "results": evidence,
                 "count": len(evidence),
-                "dropped_c2": 0  # Initialize dropped C2 count
+                "dropped_c2": dropped_c2 
             }
 
 
