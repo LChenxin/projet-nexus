@@ -91,18 +91,23 @@ def run_planner(user_query: str) -> Tuple[List[SubTask], bool, str]:
 # 3) Executor: deterministic tool calls
 # =========================
 def _internal_retrieve(query: str) -> Tuple[List[Dict[str, Any]], int]:
-    searcher = get_internal_search()
-
-    # internal_search dict: {query, results, count}
-    res = searcher.search(query)
-    internal_results = res.get("results", [])
-    # 0 for now
-    dropped_c2 = 0
-    return internal_results, dropped_c2
+    try:
+        searcher = get_internal_search()
+        res = searcher.search(query)
+        internal_results = res.get("results", [])
+        dropped_c2 = 0
+        return internal_results, dropped_c2
+    except Exception as e:
+        print(f"[Demo Debug] Internal search failed for '{query}': {e}")
+        return [], 0
 
 
 def _web_retrieve(query: str) -> Dict[str, Any]:
-    return web_search(query, top_k=config.WEB_TOP_K)
+    try:
+        return web_search(query, top_k=config.WEB_TOP_K)
+    except Exception as e:
+        print(f"[Demo Debug] Web search failed for '{query}': {e}")
+        return {"results": [], "error": str(e)}
 
 
 def _apply_retrieval_gate_internal(items: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[str]]:
@@ -123,7 +128,7 @@ def _apply_retrieval_gate_internal(items: List[Dict[str, Any]]) -> Tuple[List[Di
 
 def _apply_retrieval_gate_web(web_res: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[str]]:
     """
-    Quality gate for web retrieval, lightweight for now
+    lightweight quality gate for web retrieval
     """
     notes: List[str] = []
     items = web_res.get("results", []) or []
