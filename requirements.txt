@@ -5,3 +5,4 @@ scikit-learn
 ddgs
 streamlit
 python-dotenv
+pytest
