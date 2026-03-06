@@ -130,3 +130,5 @@ streamlit run frontend/app.py
 ```
 pytest backend/eval/evaluate.py -v
 ```
+## License
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
