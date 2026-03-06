@@ -42,41 +42,45 @@ class InternalSearch:
         return " ".join(parts)
 
 
-    def search(self, query: str) -> Dict[str, Any]:
 
-        query_vec = np.array(embed([query])[0])
+    def search(self, query: str, allow_c2: bool = False) -> Dict[str, Any]:
+            
+            query_vec = np.array(embed([query])[0])
+            
+            query_norm = query_vec / np.linalg.norm(query_vec)
+            docs_norm = self.embeddings / np.linalg.norm(self.embeddings, axis=1, keepdims=True)
+            scores = np.dot(docs_norm, query_norm)
 
-        results: List[Tuple[float, Dict[str, Any]]] = []
+            results: List[Tuple[float, Dict[str, Any]]] = []
 
-        for idx, project in enumerate(self.projects):
+            for idx, project in enumerate(self.projects):
+                
+                if not allow_c2 and project.get("confidentiality") == "C2":
+                    continue
 
-            # Access control
-            if not config.INTERNAL_ALLOW_C2 and project.get("confidentiality") == "C2":
-                continue
+                score = scores[idx]
+                if score >= config.RETRIEVAL_THRESHOLD:
+                    results.append((score, project))
 
-            score = cosine_similarity(query_vec, self.embeddings[idx])
+            results.sort(key=lambda x: x[0], reverse=True)
+            top_results = results[:config.RETRIEVAL_TOP_K]
 
-            if score >= config.RETRIEVAL_THRESHOLD:
-                results.append((score, project))
+            evidence = []
+            for score, project in top_results:
+                evidence.append({
+                    "project_id": project["project_id"],
+                    "title": project["title"],
+                    "score": round(float(score), 4),
+                    "summary": project["objective"],
+                    "status": project["status"],
+                    "confidentiality": project.get("confidentiality", "Public") 
+                })
 
-        results.sort(key=lambda x: x[0], reverse=True)
-        top_results = results[:config.RETRIEVAL_TOP_K]
-
-        evidence = []
-        for score, project in top_results:
-            evidence.append({
-                "project_id": project["project_id"],
-                "title": project["title"],
-                "score": round(float(score), 4),
-                "summary": project["objective"],
-                "status": project["status"],
-            })
-
-        return {
-            "query": query,
-            "results": evidence,
-            "count": len(evidence),
-        }
+            return {
+                "query": query,
+                "results": evidence,
+                "count": len(evidence),
+            }
 
 
 # =========================

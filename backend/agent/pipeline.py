@@ -100,10 +100,10 @@ def run_planner(user_query: str) -> Tuple[List[SubTask], bool, str]:
 # =========================
 # 3) Executor: deterministic tool calls
 # =========================
-def _internal_retrieve(query: str) -> Tuple[List[Dict[str, Any]], int]:
+def _internal_retrieve(query: str, allow_c2: bool) -> Tuple[List[Dict[str, Any]], int]:
     try:
         searcher = get_internal_search()
-        res = searcher.search(query)
+        res = searcher.search(query,allow_c2=allow_c2)
         internal_results = res.get("results", [])
         dropped_c2 = 0
         return internal_results, dropped_c2
@@ -166,7 +166,8 @@ def run_executor(state: AgentState) -> AgentState:
         q = (t.get("search_query") or t.get("question") or state["user_query"]).strip()
 
         # --- Internal retrieval ---
-        internal_items, dropped_c2 = _internal_retrieve(q)
+        allow_c2 = state.get("allow_c2", False)
+        internal_items, dropped_c2 = _internal_retrieve(q, allow_c2=allow_c2) 
         dropped_c2_total += dropped_c2
         internal_items, notes_i = _apply_retrieval_gate_internal(internal_items)
 
