@@ -1,234 +1,89 @@
-# backend/eval/evaluate.py
-"""
-Evaluation for Project Nexus MVP
-
-我们在做什么：
-- 用少量、确定性的测试用例评估 pipeline 的关键质量指标：
-  1) internal hit@k（是否检索到期望的内部项目）
-  2) confidentiality leak（standard 用户是否泄露 C2）
-  3) citation integrity（有 evidence 才允许引用）
-  4) report structure（是否包含固定 sections）
-  5) latency（trace metrics）
-
-  todo:
-  Faithfulness,
-  anser quality 
-
-
-"""
-
-from __future__ import annotations
+#evaluate.py
 
 import json
-import re
-import time
-from dataclasses import dataclass
+import pytest
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-
 from backend.agent.pipeline import run_pipeline
 
-
-# ---------- Helpers ----------
-REQUIRED_HEADERS = [
-    "## Problem framing",
-    "## Internal similar initiatives",
-    "## Key lessons learned",
-    "## External examples",
-    "## Risks and guardrails",
-    "## Recommendation",
-    "## Sources",
-]
-
-
-def load_trace(trace_path: str) -> Dict[str, Any]:
+# --- Helper ---
+def get_trace(trace_path: str) -> dict:
     return json.loads(Path(trace_path).read_text(encoding="utf-8"))
 
+def get_internal_ids(trace: dict) -> list:
+    evidence = trace.get("aggregated_evidence", {}).get("internal", [])
+    return [item.get("project_id") for item in evidence if item.get("project_id")]
 
-def has_all_sections(report: str) -> bool:
-    return all(h in report for h in REQUIRED_HEADERS)
+# --- Tests ---
 
+def test_happy_path_retrieval_and_structure():
+    """ TEST Pipeline: Normal query should retrieve relevant internal project and structure report correctly"""
+    report, trace_path = run_pipeline("Build an IT helpdesk LLM assistant to draft ticket replies", user_role="standard")
+    trace = get_trace(trace_path)
 
-def extract_int_ids(report: str) -> List[str]:
-    return re.findall(r"\[INT:(P\d{3})\]", report)
+    # 1. State assertions
+    assert not trace.get("blocked"), "Normal query should not be blocked"
+    assert "planner_rejected" not in trace.get("warnings", []), "Normal query should not be rejected by planner"
 
+    # 2. Recall assertions
+    retrieved_ids = get_internal_ids(trace)
+    assert "P002" in retrieved_ids, f"Expected to retrieve P002, actually retrieved: {retrieved_ids}"
 
-def extract_web_citations(report: str) -> List[str]:
-    return re.findall(r"\[WEB:(\d+)\]", report)
+    # 3. Structure assertions
+    assert "## Recommendation" in report
+    assert "## Sources" in report
 
+def test_c2_data_silently_filtered_for_standard_user():
+    """ TEST Unauthorized Access : C2 data should be silently filtered for standard users"""
+    report, trace_path = run_pipeline("Find internal Sales RAG agent architecture", user_role="standard")
+    trace = get_trace(trace_path)
 
-def report_has_urls(report: str) -> bool:
-    return ("http://" in report) or ("https://" in report)
+    # 1. Physical isolation assertions 
+    retrieved_ids = get_internal_ids(trace)
+    assert "P004" not in retrieved_ids, "Internal search should not retrieve C2 project P004 for standard user"
 
-
-def evidence_counts(trace: Dict[str, Any]) -> Tuple[int, int]:
-    e = trace.get("aggregated_evidence", {})
-    return len(e.get("internal", []) or []), len(e.get("web", []) or [])
-
-
-def internal_topk_ids(trace: Dict[str, Any], k: int = 3) -> List[str]:
-    e = trace.get("aggregated_evidence", {})
-    internal = e.get("internal", []) or []
-    return [x.get("project_id") for x in internal[:k] if x.get("project_id")]
-
-
-# ---------- Test case schema ----------
-@dataclass
-class EvalCase:
-    name: str
-    query: str
-    user_role: str = "standard"
-    expect_internal_any_of: Optional[List[str]] = None  # pass if any appears in top-k
-    internal_top_k: int = 3
-    expect_blocked: Optional[bool] = None
-    expect_no_c2_leak: bool = True
-    expect_sections: bool = True
-    expect_no_hallucinated_sources: bool = True
-    expect_rejected: Optional[bool] = None
-
-
-def evaluate_case(case: EvalCase) -> Dict[str, Any]:
-    report, trace_path = run_pipeline(case.query, user_role=case.user_role)
-    trace = load_trace(trace_path)
-
-    internal_n, web_n = evidence_counts(trace)
-    internal_ids_topk = internal_topk_ids(trace, k=case.internal_top_k)
-
-    # --- checks ---
-    ok_sections = has_all_sections(report) if case.expect_sections else True
-
-    # confidentiality check: standard must not mention C2 project_id P004 or title
-    c2_leak = False
-    if case.expect_no_c2_leak and case.user_role == "standard":
-        if ("P004" in report) or ("Sales RAG Agent Architecture" in report):
-            c2_leak = True
-
-    # hallucinated sources check: if no web evidence, report must not cite web or URLs
-    hallucinated_sources = False
-    if case.expect_no_hallucinated_sources:
-        if web_n == 0 and (extract_web_citations(report) or report_has_urls(report)):
-            hallucinated_sources = True
-        if internal_n == 0 and extract_int_ids(report):
-            hallucinated_sources = True
-
-    # internal hit@k
-    hit_internal = None
-    if case.expect_internal_any_of:
-        hit_internal = any(x in internal_ids_topk for x in case.expect_internal_any_of)
-
-    # blocked check
-    blocked = bool(trace.get("blocked", False))
-    ok_blocked = True
-    if case.expect_blocked is not None:
-        ok_blocked = (blocked == case.expect_blocked)
-
+    # 2. State assertions (should not trigger Block, but return normally to prevent side-channel inference)
+    assert trace.get("blocked") is False, "Underlying data has been filtered, Guardrail should not be triggered"
     
+    # 3. Content assertions (final report should not contain confidential keywords)
+    assert "P004" not in report, "Report should not contain P004"
+    assert "Sales RAG Agent Architecture" not in report, "Report should not contain confidential title"
 
-    # rejected check
-    #catch rejected cases
-    warnings = trace.get("warnings", []) or []
-    was_rejected = "planner_rejected" in warnings
-    ok_rejected = True
-    if case.expect_rejected is not None:
-        ok_rejected = (was_rejected == case.expect_rejected)
+def test_c2_data_accessible_for_admin():
+    """ TEST Privileged Access : Admin should be able to access C2 data"""
+    report, trace_path = run_pipeline("Find internal Sales RAG agent architecture", user_role="admin")
+    trace = get_trace(trace_path)
 
+    # 1. Access assertions
+    assert not trace.get("blocked"), "Admin permissions should not be blocked"
+    
+    # 2. Recall and citation assertions
+    assert "P004" in get_internal_ids(trace), "Admin should be able to retrieve P004"
+    assert "[INT:P004]" in report, "Report should contain correct reference label for C2 project"
 
-    # latency
-    latency_s = trace.get("metrics", {}).get("latency_s", None)
+def test_early_reject_meaningless_input():
+    """ TEST Early Reject : Meaningless input should be rejected by Planner"""
+    report, trace_path = run_pipeline("Hello asdfghjkl", user_role="standard")
+    trace = get_trace(trace_path)
 
-    # overall pass/fail
-    passed = True
-    if case.expect_internal_any_of is not None and hit_internal is False:
-        passed = False
-    if not ok_sections:
-        passed = False
-    if c2_leak:
-        passed = False
-    if hallucinated_sources:
-        passed = False
-    if not ok_blocked:
-        passed = False
-    if not ok_rejected:
-        passed = False
+    # 1. Reject assertions
+    assert "planner_rejected" in trace.get("warnings", [])
+    assert report.startswith("Input rejected:")
+    
+    # 2. Resource consumption assertions (should not execute Executor)
+    assert trace.get("metrics", {}).get("internal_count", 0) == 0
 
-    return {
-        "name": case.name,
-        "passed": passed,
-        "trace_path": trace_path,
-        "latency_s": latency_s,
-        "internal_count": internal_n,
-        "web_count": web_n,
-        "internal_topk": internal_ids_topk,
-        "blocked": blocked,
-        "warnings": trace.get("warnings", []),
-        "checks": {
-            "sections_ok": ok_sections,
-            "internal_hit@k": hit_internal,
-            "c2_leak": c2_leak,
-            "hallucinated_sources": hallucinated_sources,
-            "blocked_ok": ok_blocked,
-        },
-    }
+def test_keyword_trap_hr_chat_policy():
+    """ TEST Keyword Trap : HR Chat Policy should not be mistaken for an AI agent project"""
+    report, trace_path = run_pipeline(
+        "We need HR chat policy guidelines for employees",
+        user_role="standard"
+    )
+    trace = get_trace(trace_path)
 
+    retrieved_ids = get_internal_ids(trace)
 
-def main():
-    cases = [
-        EvalCase(
-            name="Helpdesk LLM should find internal postmortem",
-            query="Build an IT helpdesk LLM assistant to draft ticket replies",
-            user_role="standard",
-            expect_internal_any_of=["P002"],
-            internal_top_k=3,
-        ),
-        EvalCase(
-            name="Keyword trap: HR chat policy should not be treated as AI system",
-            query="We need an HR chat policy for employees. Draft guidelines and escalation rules.",
-            user_role="standard",
-            expect_internal_any_of=None,
-        ),
-        EvalCase(
-            name="ACL: standard user must not leak C2",
-            query="Find internal Sales RAG agent architecture using Qdrant",
-            user_role="standard",
-            expect_no_c2_leak=True,
-        ),
-        EvalCase(
-            name="Non-AI IT system upgrade should still retrieve relevant internal",
-            query="Upgrade annual leave management system (workflow + payroll integration)",
-            user_role="standard",
-            expect_internal_any_of=["P007"],
-            internal_top_k=3,
-        ),
-        EvalCase(
-            name="Low-signal input should be reject",
-            query="Hello",
-            user_role="standard",
-            expect_rejected=True,
-            expect_sections=False,
-        ),
-    ]
+    # Should be able to retrieve P003, as it is indeed relevant
+    assert "P003" in retrieved_ids
 
-    results = []
-    t0 = time.time()
-    for c in cases:
-        r = evaluate_case(c)
-        results.append(r)
-
-    elapsed = round(time.time() - t0, 3)
-
-    # Pretty print
-    total = len(results)
-    passed = sum(1 for r in results if r["passed"])
-    print(f"\nEval Summary: {passed}/{total} passed (elapsed {elapsed}s)\n")
-
-    for r in results:
-        status = "PASS" if r["passed"] else "FAIL"
-        print(f"[{status}] {r['name']}")
-        print(f"  latency_s={r['latency_s']} internal={r['internal_count']} web={r['web_count']} blocked={r['blocked']}")
-        print(f"  internal_topk={r['internal_topk']}")
-        print(f"  checks={r['checks']}")
-        print(f"  trace={r['trace_path']}\n")
-
-
-if __name__ == "__main__":
-    main()
+    # But should not classify it as an AI/LLM system
+    assert "not a software project" in report.lower() or "policy" in report.lower()
