@@ -81,10 +81,8 @@ based strictly on the provided evidence.
 
 Hard constraints:
 1) Do NOT invent internal projects or web facts not present in the evidence.
-2) Do NOT reveal restricted internal documents (confidentiality=C2). If evidence indicates restricted items exist,
-   you may say: "Some relevant internal documentation is restricted (C2) and was not accessible."
-3) Every major factual claim must include a citation right after the sentence.
-4) If evidence is weak or conflicting, say so explicitly and add an "Information gaps" item.
+2) Every major factual claim must include a citation right after the sentence.
+3) If evidence is weak or conflicting, say so explicitly and add an "Information gaps" item.
 
 Output format:
 - Write in Markdown.
@@ -102,7 +100,7 @@ Content requirements:
 - Internal similar initiatives: list up to 3 internal projects with 1-2 lines each. Include scores if provided.
 - Key lessons learned: 3-5 bullet points derived from internal outcomes/lessons.
 - External examples: 2-4 bullet points, each grounded in a web source.
-- Risks and guardrails: mention hallucination risk, latency, data governance, and access control if relevant.
+- Identify risks explicitly mentioned in the Internal or Web evidence. Do NOT generate generic risks
 - Recommendation: propose a simple MVP scope (what to build now vs later) + success criteria.
 
 Sources section rules:
