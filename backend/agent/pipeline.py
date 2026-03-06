@@ -3,10 +3,10 @@
 """
 Pipeline single DAG
 1) planner: user_query -> subtasks (id/intent/question/search_query)
-2) executor: for each subtask execute internal_search / web_search，get evidence
-3) summarizer:  evidence to brief（with citations）
-4) guardrails: 最小校验（结构、citation、C2 泄露）
-5) logging: dump state 到 logs/{trace_id}.json
+2) executor: for each subtask execute internal_search / web_search,get evidence
+3) summarizer:  evidence to brief(with citations)
+4) guardrails: Minimal checks on the final report (structure, citations, C2 leak)
+5) logging: dump state to logs/{trace_id}.json
 
 """
 
@@ -18,6 +18,8 @@ import time
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+
+from streamlit import text
 
 from backend import config
 from backend.llm import chat
@@ -80,30 +82,10 @@ def run_planner(user_query: str) -> Tuple[List[SubTask], bool, str]:
 
         return cleaned, False, ""
 
-    except Exception:
-        # fallback
-        fallback = [
-            SubTask(
-                id="T1",
-                intent="internal_similar_projects",
-                question="What similar internal initiatives exist and what were their outcomes?",
-                search_query=user_query,
-            ),
-            SubTask(
-                id="T2",
-                intent="lessons_learned",
-                question="What key lessons learned and failure modes should we consider from internal history?",
-                search_query=f"{user_query} postmortem lessons learned latency hallucination monitoring",
-            ),
-            SubTask(
-                id="T3",
-                intent="external_examples",
-                question="What external examples or best practices exist for this type of solution?",
-                search_query=f"{user_query} case study best practices",
-            ),
-        ]
-        return fallback, False, ""
-
+    except Exception as e:
+        print(f"[Demo Debug] Planner error: {e}")
+        print(f"[Demo Debug] Raw output: {text}")
+        return [], True, "Failed to parse planner output into valid JSON."
 
 # =========================
 # 3) Executor: deterministic tool calls
