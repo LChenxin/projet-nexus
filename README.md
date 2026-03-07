@@ -73,13 +73,15 @@ Project Nexus/
 ├── backend/                
 │   ├── agent/              
 │   │   ├── state.py        
-│   │   └── pipeline.py     
+│   │   ├── pipeline.py
+│   │   └── prompts.py     
 │   ├── tools/              
 │   │   ├── internal_search.py 
 │   │   └── web_search.py      
 │   ├── eval/               
 │   │   └── evaluate.py     
-│   └── config.py           
+│   ├── config.py
+│   └── llm.py           
 ├── frontend/               
 │   └── app.py              
 ├── data/                   
